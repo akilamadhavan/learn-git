@@ -1,0 +1,63 @@
+image: atlassian/default-image:3
+
+pipelines:
+  branches:
+    dev:
+      - step:
+          name: Build & Deploy Dev
+          services:
+            - docker
+          script:
+            - export AWS_REGION=us-east-1
+            - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+            - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:dev frontend/
+            - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:dev
+            - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:dev backend/
+            - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:dev
+            - cd terraform
+            - terraform init
+            - terraform workspace select dev || terraform workspace new dev
+            - terraform apply -auto-approve \
+                -var="frontend_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:dev" \
+                -var="backend_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:dev"
+
+    staging:
+      - step:
+          name: Build & Deploy Staging
+          services:
+            - docker
+          script:
+            - export AWS_REGION=us-east-1
+            - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+            - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:staging frontend/
+            - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:staging
+            - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:staging backend/
+            - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:staging
+            - cd terraform
+            - terraform init
+            - terraform workspace select staging || terraform workspace new staging
+            - terraform apply -auto-approve \
+                -var="frontend_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:staging" \
+                -var="backend_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:staging"
+
+    main:
+      - step:
+          name: Build & Deploy Prod
+          services:
+            - docker
+          script:
+            - export AWS_REGION=us-east-1
+            - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+            - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:latest frontend/
+            - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:latest
+            - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:latest backend/
+            - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:latest
+            - cd terraform
+            - terraform init
+            - terraform workspace select prod || terraform workspace new prod
+            - terraform apply -auto-approve \
+                -var="frontend_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/frontend:latest" \
+                -var="backend_image=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/backend:latest"
